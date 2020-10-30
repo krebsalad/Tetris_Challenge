@@ -3,6 +3,7 @@ import cv2
 from random import randrange
 import numpy as np
 import imutils
+import time
 
 class Block:
     def __init__(self, _type="S"):
@@ -11,7 +12,6 @@ class Block:
         self.type = _type
         self.mask = self.createMask()
         
-
     def setPosition(self, _x, _y):
         self.pos_x = _x
         self.pos_y = _y
@@ -52,6 +52,7 @@ class Tetris:
         self.active_block_index = -1
         self.rotate_input = False
         self.move_side_input = 0
+        self.last_tick = time.time()
 
     def getEmptyFrame(self):
         return [["O" for y in range(0, self.size_y)] for x in range(0, self.size_x)]
@@ -234,8 +235,14 @@ class Tetris:
 
         # update     
         else:
+            # calculate if should move down
+            move_down = 0
+            if(time.time() - self.last_tick > 0.3):
+                move_down = 1
+                self.last_tick = time.time()
+
             # check for collision if moves
-            result = self.checkIfBlockCanMove(self.blocks[self.active_block_index], 1, self.move_side_input, self.rotate_input)
+            result = self.checkIfBlockCanMove(self.blocks[self.active_block_index], move_down, self.move_side_input, self.rotate_input)
             if result[0]:
                 # move if doesnt collide
                 self.blocks[self.active_block_index].pos_x += result[1]
@@ -255,11 +262,27 @@ class Tetris:
 
 if __name__ == "__main__":
     game = Tetris(15,20)
+    move_inp = 0
+    rotate_inp = False
     while(True):
-        game.applyInput(1, True) #  apply input to move left and rotate aswell
-        if not game.update():   # update routine
-            break
-        cv2.imshow(" Tetris ", game.getOpencvDisplay())
-        cv2.waitKey(100)
+        # apply input
+        game.applyInput(move_inp, rotate_inp)
+        move_inp = 0
+        rotate_inp = False
 
+        # update game
+        if not game.update():
+            break
+
+        # display and update input
+        cv2.imshow(" Tetris ", game.getOpencvDisplay())
+        key = cv2.waitKey(1) & 0xFF
+        if key == 27:
+            break
+        elif key == 97: # A
+            move_inp = 1
+        elif key == 100: # D
+            move_inp = -1
+        elif key == 115: # S
+            rotate_inp = True
 sys.exit(0)
