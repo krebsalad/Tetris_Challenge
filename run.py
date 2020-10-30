@@ -1,14 +1,13 @@
 import sys
+import cv2
 from random import randrange
+import numpy as np
+import imutils
 
 class Block:
     def __init__(self, _type="S"):
         self.pos_x = 1
         self.pos_y = 1
-        self.size_x = 3
-        self.size_y = 3
-        self.center_x = 1
-        self.center_y = 1
         self.type = _type
         self.mask = self.createMask()
         
@@ -19,27 +18,23 @@ class Block:
 
     def createMask(self):
         if(self.type == "T"):
-            mask = [["T" for y in range(0, self.size_x)] for x in range(0, self.size_y)]
-            mask[0] = ["O" for y in range(0, self.size_x)]
-            mask[2][0] = "O"
-            mask[2][2] = "O"
+            mask = [["T" for y in range(0, 3)] for x in range(0, 2)]
+            mask[1][0] = "O"
+            mask[1][2] = "O"
             return mask
 
         if(self.type == "L"):
-            mask = [["L" for y in range(0, self.size_x)] for x in range(0, self.size_y)]
-            mask[0] = ["O" for y in range(0, self.size_x)]
-            mask[1][0] = "O"
+            mask = [["L" for y in range(0, 3)] for x in range(0, 2)]
             mask[1][1] = "O"
+            mask[1][2] = "O"
             return mask
 
         if(self.type == "I"):
-            mask = [["I" for y in range(0, self.size_x)] for x in range(0, self.size_y)]
-            mask[0] = ["O" for y in range(0, self.size_x)]
-            mask[2] = ["O" for y in range(0, self.size_x)]
+            mask = [["I" for y in range(0, 3)] for x in range(0, 1)]
             return mask  
 
         # by default a square
-        return [["S" for y in range(0, self.size_x)] for x in range(0, self.size_y)]
+        return [["S" for y in range(0, 3)] for x in range(0, 3)]
 
     def rotateLeft(self):
         
@@ -65,6 +60,31 @@ class Tetris:
         self.blocks.append(_block)
         return True
 
+    def getOpencvDisplay(self):
+        img = np.zeros((720,1020,3), np.uint8)
+        box_left_top = (20, 20)
+        box_right_bot = (1000, 700)
+        cv2.rectangle(img, box_left_top, box_right_bot, (255,0,0), 2)
+        single_rect_sizes = ((box_right_bot[0] - box_left_top[0])/self.size_x, (box_right_bot[1] - box_left_top[1])/self.size_y)
+        for x, row in enumerate(self.raw_frame):
+            for y, elem in enumerate(row):
+                if elem == "O":
+                    continue
+                left_top = (int(box_left_top[0] + (single_rect_sizes[0] * x)), int(box_left_top[1] + (single_rect_sizes[1] * y)))
+                right_bot = (int(left_top[0] + single_rect_sizes[0]), int(left_top[1] + single_rect_sizes[1]))
+                
+                color = (255,0,0)
+                if(elem == "T"):
+                    color = (0,0,255)
+                if(elem == "S"):
+                    color = (0,255,0)
+                if(elem == "I"):
+                    color = (0,255,255)
+                if(elem == "L"):
+                    color = (255,255,0)
+                cv2.rectangle(img, left_top, right_bot, color, 1)
+        return imutils.rotate_bound(img, 90)
+
     def getDisplayStr(self):
         out_str = ""
         for r, row in enumerate(self.raw_frame):
@@ -84,12 +104,12 @@ class Tetris:
         for b, block in enumerate(self.blocks):
             if(skip_active_block and b == self.active_block_index):
                 continue
-            for x in range(0, block.size_x):
-                for y in range(0, block.size_y):
+            for x, row in enumerate(block.mask):
+                for y in range(0, len(row)):
                     if(block.mask[x][y] == "O"):
                         continue
-                    frame_x = block.pos_x + (x - block.center_x)
-                    frame_y = block.pos_y + (y - block.center_y)
+                    frame_x = block.pos_x + (x - int(len(block.mask)/2))
+                    frame_y = block.pos_y + (y - int(len(row)/2))
                     if(frame_y >= self.size_y or frame_y < 0 or frame_x >= self.size_x or frame_x < 0):
                         continue
                     self.raw_frame[frame_x][frame_y] = block.mask[x][y]
@@ -118,15 +138,17 @@ class Tetris:
             # copy and possibly rotate block
             block = Block(_block.type)
             block.setPosition(_block.pos_x,_block.pos_y)
+            block.mask = _block.mask
+            
             if(rotate):
                 block.rotateLeft()
 
             # check is mask of block doesnt collide
-            for x in range(0, block.size_x):
-                for y in range(0, block.size_y):
+            for x, row in enumerate(block.mask):
+                for y in range(0, len(row)):
                     # calculate new position
-                    frame_x = block.pos_x + move_x + (x - block.center_x)
-                    frame_y = block.pos_y + move_y + (y - block.center_y)
+                    frame_x = block.pos_x + move_x + (x - int(len(block.mask)/2))
+                    frame_y = block.pos_y + move_y + (y - int(len(row)/2))
 
                     # no point in checking for nothing
                     if(block.mask[x][y] == "O"):
@@ -233,9 +255,11 @@ class Tetris:
 
 if __name__ == "__main__":
     game = Tetris(15,20)
-    for i in range(0, 100): # show 200 moves
+    while(True):
         game.applyInput(1, True) #  apply input to move left and rotate aswell
-        game.update()   # update routine
-        print(game.getDisplayStr()) # get display as str
+        if not game.update():   # update routine
+            break
+        cv2.imshow(" Tetris ", game.getOpencvDisplay())
+        cv2.waitKey(100)
 
 sys.exit(0)
